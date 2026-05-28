@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Football Auction</title>
+  <meta name="description" content="Admin control panel for football auction." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body { min-height:100vh; overflow-y:auto; background:var(--bg); }
+
+    /* ── Shell ── */
+    .shell {
+      position:relative; z-index:1;
+      display:grid;
+      grid-template-rows:56px auto 1fr;
+      grid-template-columns:1fr 320px;
+      min-height:100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column:1/-1;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 20px;
+      background:var(--bg);
+      border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:200;
+    }
+    .topbar-left  { display:flex; align-items:center; gap:10px; }
+    .topbar-right { display:flex; align-items:center; gap:8px; }
+    .brand { font-size:0.95rem; font-weight:700; display:flex; align-items:center; gap:8px; }
+    .brand-icon { font-size:1.2rem; }
+
+    /* ── Set Bar ── */
+    .set-bar {
+      grid-column:1/-1;
+      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+      padding:10px 20px;
+      background:var(--bg-2);
+      border-bottom:1px solid var(--border);
+    }
+    .set-bar label { font-size:0.75rem; font-weight:600; color:var(--text-2); white-space:nowrap; }
+    .set-bar .input { padding:7px 12px; font-size:0.85rem; width:auto; min-width:130px; }
+    .set-bar-actions { margin-left:auto; display:flex; gap:8px; }
+
+    /* ── Main col ── */
+    .main-col {
+      padding:20px;
+      display:flex; flex-direction:column; gap:16px;
+      overflow-y:auto;
+    }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+    }
+    .stat-card {
+      padding:14px 16px;
+      border-radius:var(--r-md);
+      background:var(--bg-2);
+      border:1px solid var(--border);
+      display:flex; flex-direction:column; gap:4px;
+    }
+    .stat-val {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:2rem; line-height:1;
+      letter-spacing:0.04em;
+    }
+    .stat-lbl {
+      font-size:0.7rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.1em;
+      color:var(--text-3);
+    }
+    .stat-card.s-queue .stat-val { color:var(--blue); }
+    .stat-card.s-sold  .stat-val { color:var(--green); }
+    .stat-card.s-unsold .stat-val { color:var(--red); }
+
+    /* ── No-player state ── */
+    #no-player {
+      display:none;
+      flex-direction:column; align-items:center; gap:12px;
+      padding:48px 24px;
+      border-radius:var(--r-lg);
+      border:2px dashed var(--border);
+      text-align:center;
+    }
+    #no-player.show { display:flex; }
+    .no-player-icon { font-size:2.4rem; opacity:0.4; }
+
+    /* ── Player card ── */
+    #player-card {
+      display:none;
+      gap:20px;
+      padding:20px;
+      border-radius:var(--r-lg);
+      background:var(--bg-2);
+      border:1px solid var(--border);
+      align-items:center;
+    }
+    #player-card.show { display:flex; }
+
+    .player-photo {
+      width:96px; height:96px;
+      border-radius:var(--r-md);
+      object-fit:cover; object-position:top;
+      border:1px solid var(--border);
+      flex-shrink:0;
+      background:var(--bg-4);
+    }
+    .player-info { flex:1; display:flex; flex-direction:column; gap:4px; min-width:0; }
+    #p-name { font-size:1.3rem; font-weight:800; line-height:1.2; }
+    #p-pos  { font-size:0.78rem; color:var(--gold); font-weight:600; text-transform:uppercase; letter-spacing:0.08em; }
+    #p-club { font-size:0.82rem; color:var(--text-2); }
+    .price-block { flex-shrink:0; text-align:right; }
+    #p-price { font-size:2.6rem; }
+    #p-base  { font-size:0.75rem; color:var(--text-3); margin-top:2px; }
+
+    /* ── Round Summary ── */
+    #round-summary {
+      display:none;
+      flex-direction:column; gap:16px;
+      padding:24px;
+      border-radius:var(--r-lg);
+      border:1px solid var(--border);
+      background:var(--bg-2);
+      text-align:center;
+    }
+    #round-summary.show { display:flex; }
+    .rs-title { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:0.05em; color:var(--gold); }
+    .rs-stats { display:flex; gap:20px; justify-content:center; margin-bottom:12px; }
+    .rs-stat { display:flex; flex-direction:column; gap:4px; }
+    .rs-val { font-size:1.6rem; font-family:'Bebas Neue',sans-serif; color:var(--text); }
+    .rs-lbl { font-size:0.7rem; font-weight:600; text-transform:uppercase; color:var(--text-3); }
+
+    /* ── Bid controls ── */
+    .controls-card {
+      padding:18px;
+      border-radius:var(--r-lg);
+      background:var(--bg-2);
+      border:1px solid var(--border);
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .controls-label {
+      font-size:0.72rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.1em;
+      color:var(--text-3);
+    }
+    .bid-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .action-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+    .bid-btn {
+      padding:18px;
+      font-family:'Bebas Neue',sans-serif;
+      font-size:1.3rem; letter-spacing:0.06em;
+      border-radius:var(--r-md);
+      border:none; cursor:pointer;
+      transition:all var(--t) var(--ease);
+    }
+    .bid-btn:active { transform:scale(0.97); }
+    .bid-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+    .bid-inc { background:#15803d; color:#fff; }
+    .bid-inc:hover:not(:disabled) { background:#16a34a; }
+    .bid-dec { background:#991b1b; color:#fff; }
+    .bid-dec:hover:not(:disabled) { background:#b91c1c; }
+
+    .act-btn {
+      padding:14px; font-size:0.9rem; font-weight:700;
+      border-radius:var(--r-md); border:none; cursor:pointer;
+      transition:all var(--t) var(--ease);
+      display:flex; align-items:center; justify-content:center; gap:6px;
+    }
+    .act-btn:active { transform:scale(0.97); }
+
+    .act-sold   { background:var(--gold); color:#1a0e00; }
+    .act-sold:hover { background:#f5c842; }
+    .act-unsold { background:var(--bg-3); border:1px solid var(--border); color:var(--text-2); }
+    .act-unsold:hover { border-color:var(--red); color:var(--red); background:var(--red-dim); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      border-left:1px solid var(--border);
+      display:flex; flex-direction:column;
+      height:calc(100vh - 56px - 52px);
+      position:sticky;
+      top:108px;
+      overflow:hidden;
+    }
+
+    .tab-row {
+      display:flex;
+      border-bottom:1px solid var(--border);
+      flex-shrink:0;
+    }
+    .tab {
+      flex:1; padding:11px 4px;
+      font-size:0.68rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.04em;
+      color:var(--text-3);
+      background:none; border:none; cursor:pointer;
+      border-bottom:2px solid transparent;
+      transition:all var(--t) var(--ease);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+
+    .tab-panel {
+      display:none; flex-direction:column;
+      flex:1; overflow-y:auto; padding:12px;
+    }
+    .tab-panel.active { display:flex; }
+
+    /* ── Queue item ── */
+    .q-item {
+      display:flex; align-items:center; gap:10px;
+      padding:9px 10px;
+      border-radius:var(--r-md);
+      border:1px solid transparent;
+      transition:all var(--t) var(--ease);
+      margin-bottom:4px;
+    }
+    .q-item.current {
+      background:var(--gold-dim);
+      border-color:rgba(240,180,41,0.2);
+    }
+    .q-item img {
+      width:36px; height:36px;
+      border-radius:50%;
+      object-fit:cover; object-position:top;
+      border:1px solid var(--border);
+      flex-shrink:0;
+      background:var(--bg-4);
+    }
+    .q-info { flex:1; min-width:0; }
+    .q-name { font-size:0.84rem; font-weight:600; display:block; }
+    .q-sub  { font-size:0.72rem; color:var(--text-2); display:block; }
+    .q-price { font-size:0.8rem; font-weight:700; color:var(--gold); flex-shrink:0; }
+    .q-price.sold { color:var(--green); }
+
+    /* ── Empty state ── */
+    .empty-state {
+      font-size:0.82rem; color:var(--text-3);
+      text-align:center; padding:24px 12px;
+    }
+
+    /* ── Round 2 / reset area ── */
+    #round2-area { display:none; }
+    #round2-area.show { display:block; }
+
+    /* ── CRUD table ── */
+    .crud-table {
+      width:100%; border-collapse:collapse; font-size:0.84rem;
+    }
+    .crud-table th {
+      padding:10px 10px;
+      text-align:left;
+      font-size:0.7rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.08em;
+      color:var(--text-3);
+      border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    .crud-table td {
+      padding:10px;
+      border-bottom:1px solid var(--border);
+      vertical-align:middle;
+    }
+    .crud-table tr:last-child td { border-bottom:none; }
+    .crud-table tr:hover td { background:var(--bg-3); }
+    .crud-table td img {
+      width:32px; height:32px; border-radius:50%;
+      object-fit:cover; object-position:top;
+      border:1px solid var(--border);
+      background:var(--bg-4);
+      display:block;
+    }
+
+    /* ── Form grid ── */
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-group { display:flex; flex-direction:column; gap:5px; }
+    .form-group.span-2 { grid-column:span 2; }
+
+    /* ── Photo preview ── */
+    .photo-preview-wrap {
+      display:flex; align-items:center; gap:12px; margin-top:4px;
+    }
+    #photo-preview {
+      width:48px; height:48px;
+      border-radius:50%; object-fit:cover;
+      border:1px solid var(--border);
+      display:none; background:var(--bg-4);
+    }
+
+    /* ── Responsive ── */
+    @media(max-width:860px) {
+      .shell { grid-template-columns:1fr; }
+      .sidebar {
+        position:static; height:auto; max-height:360px;
+        border-left:none; border-top:1px solid var(--border);
+      }
+    }
+    @media(max-width:560px) {
+      #player-card { flex-direction:column; text-align:center; }
+      .price-block { text-align:center; }
+      .set-bar { gap:8px; }
+      .stats-row { grid-template-columns:repeat(3,1fr); gap:6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <div class="shell">
+
+    <!-- ── Topbar ── -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand"><span class="brand-icon">⚽</span> Football Auction</div>
+        <span id="round-badge" class="badge badge-gold">Round 1</span>
+        <span id="set-badge"   class="badge badge-blue">Forwards · Set 1</span>
+      </div>
+      <div class="topbar-right">
+        <a href="display.html" target="_blank" class="btn btn-ghost btn-sm">📺 Display</a>
+        <button id="btn-manage" class="btn btn-ghost btn-sm">⚙ Players DB</button>
+        <button id="btn-teams" class="btn btn-ghost btn-sm">🛡 Teams</button>
+        <button id="btn-reset"  class="btn btn-danger btn-sm">↺ Reset</button>
+        <div class="admin-mun-seal" style="display:flex; align-items:center; gap:6px; border-left:1px solid var(--border); padding-left:12px; margin-left:8px; pointer-events:none;">
+          <img src="logo.png" style="height:28px; object-fit:contain;" alt="MUN" />
+          <span style="font-family:'Bebas Neue',sans-serif; font-size:0.9rem; color:var(--gold); letter-spacing:0.05em;">MUN</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Set / Category bar ── -->
+    <div class="set-bar">
+      <label for="sel-cat">Category</label>
+      <select id="sel-cat" class="input">
+        <option value="Forwards">⚡ Forwards</option>
+        <option value="Midfielders">🎯 Midfielders</option>
+        <option value="Defenders">🛡 Defenders</option>
+        <option value="Goalkeepers">🧤 Goalkeepers</option>
+      </select>
+
+      <label for="sel-set">Set</label>
+      <select id="sel-set" class="input">
+        <option value="1">Set 1</option>
+        <option value="2">Set 2</option>
+        <option value="3">Set 3</option>
+        <option value="4">Set 4</option>
+        <option value="5">Set 5</option>
+      </select>
+
+      <button id="btn-load" class="btn btn-blue-soft btn-sm">▶ Load Set</button>
+
+      <div class="set-bar-actions">
+        <button id="btn-add-player" class="btn btn-green-soft btn-sm">+ Add Player</button>
+      </div>
+    </div>
+
+    <!-- ── Main Column ── -->
+    <main class="main-col">
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card s-queue">
+          <div class="stat-val" id="stat-queue">0</div>
+          <div class="stat-lbl">In Queue</div>
+        </div>
+        <div class="stat-card s-sold">
+          <div class="stat-val" id="stat-sold">0</div>
+          <div class="stat-lbl">Sold</div>
+        </div>
+        <div class="stat-card s-unsold">
+          <div class="stat-val" id="stat-unsold">0</div>
+          <div class="stat-lbl">Unsold</div>
+        </div>
+      </div>
+
+      <!-- No player -->
+      <div id="no-player">
+        <div class="no-player-icon">🏁</div>
+        <p class="text-muted text-sm" id="no-player-msg">Queue is empty for this set.</p>
+        <div id="next-set-area">
+          <button id="btn-next-set" class="btn btn-blue-soft" style="display:none;">Next Set ➔</button>
+        </div>
+        <div id="category-prompt-area" style="display:none; margin-top:20px; text-align:center;">
+          <p class="text-muted text-sm" style="margin-bottom:12px;">Select the next category to auction:</p>
+          <div id="category-buttons" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+
+      <!-- Round Summary -->
+      <div id="round-summary">
+        <div class="rs-title">Round 1 Completed</div>
+        <div class="rs-stats">
+          <div class="rs-stat"><span class="rs-val" id="rs-spent">$0M</span><span class="rs-lbl">Total Spent</span></div>
+          <div class="rs-stat"><span class="rs-val text-green" id="rs-sold">0</span><span class="rs-lbl">Players Sold</span></div>
+          <div class="rs-stat"><span class="rs-val text-red" id="rs-unsold">0</span><span class="rs-lbl">Players Unsold</span></div>
+        </div>
+        <p class="text-muted text-sm" style="margin-bottom:12px;">All sets have been auctioned.</p>
+        <button id="btn-start-global-round2" class="btn btn-gold btn-lg">Start Round 2 (Unsold Players)</button>
+      </div>
+
+      <!-- Player card -->
+      <div id="player-card">
+        <img id="p-photo" class="player-photo" src="" alt="Player" />
+        <div class="player-info">
+          <div id="p-pos"></div>
+          <div id="p-name"></div>
+          <div id="p-club"></div>
+        </div>
+        <div class="price-block">
+          <div id="p-price" class="price-tag"></div>
+          <div id="p-base" class="text-dim"></div>
+        </div>
+      </div>
+
+      <!-- Bid controls -->
+      <div class="controls-card" id="bid-controls">
+        <div class="controls-label">💰 Bid — $10M per click</div>
+        <div class="bid-row">
+          <button id="btn-dec" class="bid-btn bid-dec">▼ −$10M</button>
+          <button id="btn-inc" class="bid-btn bid-inc">▲ +$10M</button>
+        </div>
+        <div class="action-row">
+          <button id="btn-sold" class="act-btn act-sold">🏆 Mark SOLD</button>
+          <button id="btn-skip" class="act-btn act-unsold">⏭ Skip / Unsold</button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="tab-row">
+        <button class="tab active" data-tab="queue">⏳ Queue</button>
+        <button class="tab"        data-tab="sold">✅ Sold</button>
+        <button class="tab"        data-tab="unsold">❌ Unsold</button>
+        <button class="tab"        data-tab="status">📊 Status</button>
+      </div>
+      <div class="tab-panel active" id="panel-queue">
+        <div id="queue-list"></div>
+      </div>
+      <div class="tab-panel" id="panel-sold">
+        <div id="sold-list"></div>
+      </div>
+      <div class="tab-panel" id="panel-unsold">
+        <div id="unsold-list"></div>
+      </div>
+      <div class="tab-panel" id="panel-status">
+        <div id="status-overview"></div>
+      </div>
+    </aside>
+
+  </div><!-- /shell -->
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Add / Edit Player Modal                             -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-player">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="modal-player-title">Add Player</div>
+        <button class="modal-close" data-close="modal-player">✕</button>
+      </div>
+
+      <form id="form-player" autocomplete="off">
+        <input type="hidden" id="f-edit-id" />
+
+        <div class="form-grid">
+          <!-- Name -->
+          <div class="form-group span-2">
+            <label class="label" for="f-name">Player Name *</label>
+            <input class="input" id="f-name" type="text" placeholder="e.g. Neymar Jr." required />
+          </div>
+
+          <!-- Category -->
+          <div class="form-group">
+            <label class="label" for="f-category">Category *</label>
+            <select class="input" id="f-category" required>
+              <option value="Forwards">Forwards</option>
+              <option value="Midfielders">Midfielders</option>
+              <option value="Defenders">Defenders</option>
+              <option value="Goalkeepers">Goalkeepers</option>
+            </select>
+          </div>
+
+          <!-- Set -->
+          <div class="form-group">
+            <label class="label" for="f-set">Set Number *</label>
+            <input class="input" id="f-set" type="number" min="1" value="1" required />
+          </div>
+
+          <!-- Position -->
+          <div class="form-group">
+            <label class="label" for="f-position">Position / Role</label>
+            <input class="input" id="f-position" type="text" placeholder="e.g. Left Winger" />
+          </div>
+
+          <!-- Club -->
+          <div class="form-group">
+            <label class="label" for="f-club">Club</label>
+            <input class="input" id="f-club" type="text" placeholder="e.g. Barcelona" />
+          </div>
+
+          <!-- Nationality -->
+          <div class="form-group">
+            <label class="label" for="f-nat">Nationality</label>
+            <input class="input" id="f-nat" type="text" placeholder="e.g. Brazil" />
+          </div>
+
+          <!-- Base Price -->
+          <div class="form-group">
+            <label class="label" for="f-price">Base Price ($M) *</label>
+            <input class="input" id="f-price" type="number" min="1" placeholder="e.g. 50" required />
+          </div>
+
+          <!-- Photo upload -->
+          <div class="form-group span-2">
+            <label class="label" for="f-file">Upload Photo</label>
+            <input class="input" id="f-file" type="file" accept="image/*" style="padding:6px 12px;" />
+          </div>
+
+          <!-- Photo URL fallback -->
+          <div class="form-group span-2">
+            <label class="label" for="f-url">Or Photo URL</label>
+            <input class="input" id="f-url" type="url" placeholder="https://..." />
+          </div>
+
+          <!-- Preview -->
+          <div class="form-group span-2">
+            <div class="photo-preview-wrap">
+              <img id="photo-preview" src="" alt="preview" />
+              <span class="text-dim text-xs">Preview updates as you type or pick a file</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:16px;"></div>
+        <button type="submit" id="btn-player-submit" class="btn btn-gold btn-lg btn-full">Add to Database</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Database (CRUD) Modal                               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-db">
+    <div class="modal modal-wide" style="max-height:85vh;">
+      <div class="modal-head">
+        <div class="modal-title shimmer">Player Database</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="btn-db-add" class="btn btn-gold btn-sm">+ Add Player</button>
+          <button class="modal-close" data-close="modal-db">✕</button>
+        </div>
+      </div>
+
+      <div id="crud-container" style="overflow-x:auto;">
+        <!-- table renders here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Teams Database (CRUD) Modal                         -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-teams">
+    <div class="modal modal-wide" style="max-height:85vh;">
+      <div class="modal-head">
+        <div class="modal-title shimmer">Teams Database</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="btn-team-add" class="btn btn-gold btn-sm">+ Add Team</button>
+          <button class="modal-close" data-close="modal-teams">✕</button>
+        </div>
+      </div>
+
+      <div id="teams-crud-container" style="overflow-x:auto;">
+        <!-- table renders here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Add / Edit Team Modal                               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-team-form">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="modal-team-title">Add Team</div>
+        <button class="modal-close" data-close="modal-team-form">✕</button>
+      </div>
+
+      <form id="form-team" autocomplete="off">
+        <input type="hidden" id="f-team-id" />
+
+        <div class="form-grid">
+          <!-- Name -->
+          <div class="form-group span-2">
+            <label class="label" for="f-team-name">Team Name *</label>
+            <input class="input" id="f-team-name" type="text" placeholder="e.g. Red Dragons" required />
+          </div>
+
+          <!-- Logo URL -->
+          <div class="form-group span-2">
+            <label class="label" for="f-team-logo">Logo URL</label>
+            <input class="input" id="f-team-logo" type="url" placeholder="https://..." />
+          </div>
+        </div>
+
+        <div style="height:16px;"></div>
+        <button type="submit" id="btn-team-submit" class="btn btn-gold btn-lg btn-full">Save Team</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- Confirm Sale Modal                                  -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modal-sold">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title text-green">Confirm Sale</div>
+        <button class="modal-close" data-close="modal-sold">✕</button>
+      </div>
+      
+      <div style="margin-bottom:20px; font-size:1.1rem; color:var(--text); text-align:center;">
+        Selling <span id="sold-player-name" class="text-gold" style="font-weight:bold;">Player</span> 
+        for <span id="sold-player-price" class="text-green" style="font-weight:bold;">$0M</span>
+      </div>
+
+      <div class="form-group" style="margin-bottom:24px;">
+        <label class="label" for="sel-buying-team">Select Buying Team *</label>
+        <select class="input" id="sel-buying-team" required>
+          <option value="">-- Choose Team --</option>
+        </select>
+      </div>
+
+      <button id="btn-confirm-sale" class="btn btn-green btn-lg btn-full">Confirm & Mark Sold</button>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script>
+    // Sidebar tabs
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+      });
+    });
+    // Generic modal close via data-close attribute
+    document.querySelectorAll('[data-close]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById(btn.dataset.close).classList.remove('open');
+      });
+    });
+    // Close on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('open');
+      });
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

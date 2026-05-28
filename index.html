@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Auction</title>
+  <meta name="description" content="Real-time football player auction system." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+
+    .logo-mark {
+      font-size:3.2rem; line-height:1; margin-bottom:16px;
+      animation:bob 3s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%,100% { transform:translateY(0); }
+      50%      { transform:translateY(-8px); }
+    }
+
+    h1.site-title {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(2.4rem,6vw,4rem);
+      letter-spacing:0.06em;
+      line-height:1;
+      margin-bottom:6px;
+    }
+
+    .site-sub {
+      font-size:0.88rem; color:var(--text-2);
+      margin-bottom:48px;
+      letter-spacing:0.02em;
+    }
+
+    .launch-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+      width:min(640px,100%);
+      padding:0 16px;
+    }
+    @media(max-width:500px) { .launch-grid { grid-template-columns:1fr; } }
+
+    .launch-card {
+      display:flex; flex-direction:column;
+      padding:28px 24px; gap:12px;
+      border-radius:var(--r-xl);
+      text-decoration:none;
+      border:1px solid var(--border);
+      background:var(--bg-2);
+      transition:transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+    }
+    .launch-card:hover { transform:translateY(-4px); }
+
+    .launch-card.admin:hover  { border-color:rgba(240,180,41,0.4); box-shadow:0 8px 40px rgba(240,180,41,0.1); }
+    .launch-card.display:hover{ border-color:rgba(59,130,246,0.4); box-shadow:0 8px 40px rgba(59,130,246,0.1); }
+
+    .launch-icon { font-size:2rem; line-height:1; }
+    .launch-label { font-size:1rem; font-weight:700; }
+    .launch-desc  { font-size:0.82rem; color:var(--text-2); line-height:1.6; }
+    .launch-cta {
+      margin-top:4px;
+      display:inline-flex; align-items:center;
+      font-size:0.8rem; font-weight:600; letter-spacing:0.04em;
+      gap:4px;
+    }
+    .launch-card.admin  .launch-cta { color:var(--gold); }
+    .launch-card.display .launch-cta { color:var(--blue); }
+
+    .footer-hint {
+      margin-top:40px;
+      font-size:0.78rem; color:var(--text-3);
+      text-align:center; line-height:1.8;
+      padding:0 16px;
+    }
+    .footer-hint b { color:var(--text-2); font-weight:500; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <div class="z-1" style="text-align:center;">
+    <div class="logo-mark">⚽</div>
+    <h1 class="site-title shimmer">Football Auction</h1>
+    <p class="site-sub">Real-Time Player Auction System</p>
+
+    <div class="launch-grid">
+      <a href="admin.html" target="_blank" class="launch-card admin">
+        <div class="launch-icon">🎛️</div>
+        <div class="launch-label">Admin Panel</div>
+        <p class="launch-desc">Control bids, manage player sets, handle CRUD operations.</p>
+        <div class="launch-cta">Open Admin →</div>
+      </a>
+
+      <a href="display.html" target="_blank" class="launch-card display">
+        <div class="launch-icon">📺</div>
+        <div class="launch-label">Live Display</div>
+        <p class="launch-desc">Full-screen projector view with live bid updates.</p>
+        <div class="launch-cta">Open Display →</div>
+      </a>
+    </div>
+
+    <p class="footer-hint">
+      Open <b>Admin</b> on your device · Open <b>Live Display</b> on the projector<br />
+      Syncs in real-time via Supabase — no internet sharing needed
+    </p>
+  </div>
+
+  <div id="toast-container"></div>
+</body>
+</html>

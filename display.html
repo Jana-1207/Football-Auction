@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Display — Football Auction</title>
+  <meta name="description" content="Full-screen live auction display." />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    html, body {
+      width:100%; height:100%;
+      overflow:hidden;
+      cursor:none;
+      background:var(--bg);
+    }
+
+    /* ── Waiting screen ── */
+    #waiting {
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:16px; z-index:10;
+    }
+    .waiting-icon {
+      font-size:4rem; line-height:1;
+      animation:breathe 2s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%,100% { opacity:0.3; transform:scale(1); }
+      50%      { opacity:1;   transform:scale(1.05); }
+    }
+    .waiting-title {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:2.2rem; letter-spacing:0.1em;
+      color:var(--text-2);
+    }
+    .waiting-sub { font-size:0.9rem; color:var(--text-3); }
+
+    /* ── Main display ── */
+    #display {
+      position:fixed; inset:0;
+      display:none;
+      flex-direction:row;
+    }
+    #display.show { display:flex; }
+
+    /* Photo panel */
+    .d-photo-panel {
+      position:relative;
+      width:42%; flex-shrink:0;
+      overflow:hidden;
+      background:#000;
+    }
+    .d-photo-panel::after {
+      content:'';
+      position:absolute; inset:0;
+      background:linear-gradient(to right, transparent 40%, var(--bg) 100%);
+      z-index:1;
+    }
+    #d-photo {
+      width:100%; height:100%;
+      object-fit:cover; object-position:top center;
+      display:block;
+      transition:opacity 0.5s ease;
+    }
+
+    /* Info panel */
+    .d-info {
+      flex:1;
+      display:flex; flex-direction:column; justify-content:center;
+      padding:60px 64px 100px 40px;
+      position:relative; z-index:2;
+    }
+
+    /* Round + set badges */
+    .d-top-badges {
+      display:flex; align-items:center; gap:12px;
+      margin-bottom:24px;
+    }
+    #d-round {
+      font-size:0.82rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:0.15em;
+      color:var(--gold);
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    #d-round::before {
+      content:'';
+      width:7px; height:7px;
+      background:var(--gold); border-radius:50%;
+      animation:blink 1.4s ease-in-out infinite;
+      flex-shrink:0;
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; }
+      50%      { opacity:0.2; }
+    }
+
+    /* Player name */
+    #d-name {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(3rem,7vw,7rem);
+      line-height:0.95;
+      letter-spacing:0.02em;
+      color:#fff;
+      margin-bottom:18px;
+    }
+
+    /* Meta */
+    .d-meta {
+      display:flex; flex-direction:column; gap:8px;
+      margin-bottom:40px;
+    }
+    #d-pos  { font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--gold); }
+    #d-club,
+    #d-nat  { font-size:0.92rem; color:var(--text-2); }
+
+    /* Price */
+    .d-price-section { display:flex; flex-direction:column; gap:6px; }
+    .d-price-label {
+      font-size:0.78rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:0.12em; color:var(--text-3);
+    }
+    .d-price-row { display:flex; align-items:center; gap:16px; }
+    #d-price {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(4rem,10vw,9rem);
+      color:var(--gold);
+      letter-spacing:0.04em;
+      line-height:1;
+      text-shadow:0 0 40px rgba(240,180,41,0.4);
+    }
+    .d-arrow {
+      font-size:2rem; font-weight:900;
+      opacity:0;
+      transition:opacity 0.3s;
+    }
+    .d-arrow.up   { color:var(--green); }
+    .d-arrow.down { color:var(--red); }
+    #d-base { font-size:0.9rem; color:var(--text-3); margin-top:4px; }
+
+    /* Vertical accent line */
+    .d-info::before {
+      content:'';
+      position:absolute; left:0; top:12%; height:76%;
+      width:2px;
+      background:linear-gradient(to bottom, transparent, var(--gold), transparent);
+    }
+
+    /* ── SOLD / UNSOLD overlay ── */
+    .result-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+    }
+    .result-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #overlay-sold {
+      background: radial-gradient(circle at center, rgba(240, 180, 41, 0.08) 0%, rgba(13, 13, 15, 0.94) 80%);
+    }
+    #overlay-unsold {
+      background: radial-gradient(circle at center, rgba(239, 68, 68, 0.08) 0%, rgba(13, 13, 15, 0.94) 80%);
+    }
+
+    .ov-card {
+      position: relative;
+      width: min(520px, 90vw);
+      background: rgba(20, 20, 24, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 28px;
+      padding: 40px 32px 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transform: scale(0.85) translateY(30px);
+      opacity: 0;
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+    }
+    .result-overlay.show .ov-card {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+    
+    .sold-card {
+      border-color: rgba(240, 180, 41, 0.25);
+      box-shadow: 
+        0 24px 60px rgba(0, 0, 0, 0.6), 
+        0 0 50px rgba(240, 180, 41, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      animation: pulse-gold-glow 4s ease-in-out infinite;
+    }
+    .unsold-card {
+      border-color: rgba(239, 68, 68, 0.25);
+      box-shadow: 
+        0 24px 60px rgba(0, 0, 0, 0.6), 
+        0 0 50px rgba(239, 68, 68, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      animation: pulse-red-glow 4s ease-in-out infinite;
+    }
+    @keyframes pulse-gold-glow {
+      0%, 100% { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(240, 180, 41, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.15); }
+      50% { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 65px rgba(240, 180, 41, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+    }
+    @keyframes pulse-red-glow {
+      0%, 100% { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(239, 68, 68, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.15); }
+      50% { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 65px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+    }
+
+    .result-overlay.show .ov-ribbon,
+    .result-overlay.show .ov-logo-container,
+    .result-overlay.show .ov-icon-wrapper,
+    .result-overlay.show .ov-meta,
+    .result-overlay.show .ov-divider-line,
+    .result-overlay.show .ov-price-container,
+    .result-overlay.show .ov-unsold-hint {
+      animation: ov-stagger-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    
+    .result-overlay.show .ov-ribbon           { animation-delay: 0.10s; }
+    .result-overlay.show .ov-logo-container   { animation-delay: 0.18s; }
+    .result-overlay.show .ov-icon-wrapper     { animation-delay: 0.18s; }
+    .result-overlay.show .ov-meta             { animation-delay: 0.26s; }
+    .result-overlay.show .ov-divider-line     { animation-delay: 0.34s; }
+    .result-overlay.show .ov-price-container  { animation-delay: 0.42s; }
+    .result-overlay.show .ov-unsold-hint      { animation-delay: 0.42s; }
+
+    @keyframes ov-stagger-in {
+      from { opacity: 0; transform: translateY(24px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .ov-ribbon {
+      margin-bottom: 24px;
+      opacity: 0;
+    }
+    .ov-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .sold-badge {
+      background: rgba(34, 197, 94, 0.12);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+    .unsold-badge {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+    .ov-badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      animation: ov-blink 1.2s ease-in-out infinite;
+    }
+    .unsold-badge .ov-badge-dot {
+      background: #f87171;
+    }
+    @keyframes ov-blink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.8); }
+    }
+
+    .ov-logo-container {
+      position: relative;
+      width: 110px; height: 110px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.02);
+      border: 2px dashed rgba(240, 180, 41, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      padding: 8px;
+      box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        inset 0 0 20px rgba(240, 180, 41, 0.08);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .ov-logo-container.has-logo {
+      border-style: solid;
+      border-color: rgba(240, 180, 41, 0.6);
+      background: rgba(255, 255, 255, 0.04);
+      box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        0 0 25px rgba(240, 180, 41, 0.15),
+        inset 0 0 15px rgba(240, 180, 41, 0.1);
+    }
+    .ov-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+    }
+    .ov-logo-placeholder {
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.8rem;
+      color: var(--gold);
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 12px rgba(240, 180, 41, 0.6);
+    }
+
+    .ov-icon-wrapper {
+      margin-bottom: 24px;
+      opacity: 0;
+    }
+    .ov-icon-circle {
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.06);
+      border: 2px solid rgba(239, 68, 68, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        0 0 25px rgba(239, 68, 68, 0.15);
+      animation: bounce-alert 2s ease-in-out infinite;
+    }
+    @keyframes bounce-alert {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .ov-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 20px;
+      opacity: 0;
+    }
+    .ov-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-3);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .ov-team-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      line-height: 1.05;
+      color: #fff;
+      letter-spacing: 0.06em;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .ov-status-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      line-height: 1.05;
+      color: var(--red);
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
+    }
+
+    .ov-divider-line {
+      width: 80px;
+      height: 1px;
+      margin-bottom: 20px;
+      opacity: 0;
+    }
+    .sold-card .ov-divider-line {
+      background: linear-gradient(90deg, transparent, rgba(240, 180, 41, 0.35), transparent);
+    }
+    .unsold-card .ov-divider-line {
+      background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.35), transparent);
+    }
+
+    .ov-price-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      opacity: 0;
+    }
+    .ov-price {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3.2rem, 8vw, 5.2rem);
+      line-height: 1;
+      color: var(--gold);
+      letter-spacing: 0.04em;
+      text-shadow: 0 0 35px rgba(240, 180, 41, 0.6);
+      animation: pulse-price 1.8s ease-in-out infinite alternate;
+    }
+    @keyframes pulse-price {
+      from { transform: scale(1); text-shadow: 0 0 30px rgba(240, 180, 41, 0.5); }
+      to { transform: scale(1.02); text-shadow: 0 0 45px rgba(240, 180, 41, 0.8); }
+    }
+    .ov-unsold-hint {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-2);
+      letter-spacing: 0.02em;
+      opacity: 0;
+    }
+
+    /* ── Footer ticker ── */
+    .d-footer {
+      position:fixed; bottom:0; left:0; right:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 40px;
+      background:rgba(13,13,15,0.85);
+      border-top:1px solid var(--border);
+      backdrop-filter:blur(16px);
+    }
+    .d-footer-brand {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:1rem; letter-spacing:0.1em; color:var(--text-3);
+    }
+    .d-tickers { display:flex; gap:32px; }
+    .ticker-item { display:flex; align-items:center; gap:8px; font-size:0.84rem; }
+    .t-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .t-label { color:var(--text-3); }
+    .t-val   { font-weight:700; font-size:0.95rem; }
+    .ticker-item.sold .t-dot  { background:var(--green); }
+    .ticker-item.sold .t-val  { color:var(--green); }
+    .ticker-item.unsold .t-dot { background:var(--red); }
+    .ticker-item.unsold .t-val { color:var(--red); }
+    .ticker-item.remain .t-dot { background:var(--blue); }
+    .ticker-item.remain .t-val { color:var(--blue); }
+
+    .d-hint { font-size:0.7rem; color:var(--text-3); }
+  </style>
+</head>
+<body>
+
+  <!-- Global MUN Corner Seal -->
+  <div class="mun-corner-seal">
+    <img src="logo.png" alt="MUN Seal" />
+    <span>MUN Edition</span>
+  </div>
+
+  <style>
+    /* ── Welcome / Intro screen ── */
+    #screen-welcome {
+      position:fixed; inset:0; z-index:50;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:0;
+      background:var(--bg);
+      transition:opacity 0.8s ease;
+    }
+    #screen-welcome.fade-out { opacity:0; pointer-events:none; }
+    #screen-welcome.hidden   { display:none; }
+
+    .welcome-ball {
+      font-size:5rem; line-height:1; margin-bottom:24px;
+      animation:welcomeBounce 1s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    .mun-corner-seal {
+      position: fixed;
+      top: 24px;
+      right: 32px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.75;
+      z-index: 100;
+      pointer-events: none;
+      animation: fadeUp 1s ease-out both;
+    }
+    .mun-corner-seal img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(240, 180, 41, 0.3));
+    }
+    .mun-corner-seal span {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1rem;
+      color: var(--gold);
+      letter-spacing: 0.08em;
+    }
+    @keyframes welcomeBounce {
+      from { opacity:0; transform:translateY(-40px) scale(0.6); }
+      to   { opacity:1; transform:translateY(0) scale(1); }
+    }
+    .welcome-title {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(3rem,8vw,6rem);
+      letter-spacing:0.1em;
+      line-height:1;
+      text-align:center;
+      animation:fadeUp 0.6s 0.3s both;
+    }
+    .welcome-sub {
+      margin-top:16px;
+      font-size:clamp(1rem,2.5vw,1.4rem);
+      color:var(--text-2);
+      text-align:center;
+      letter-spacing:0.04em;
+      animation:fadeUp 0.6s 0.6s both;
+    }
+    .welcome-tagline {
+      margin-top:32px;
+      font-size:clamp(0.8rem,1.8vw,1rem);
+      color:var(--text-3);
+      text-align:center;
+      letter-spacing:0.1em;
+      text-transform:uppercase;
+      animation:fadeUp 0.6s 0.9s both;
+    }
+    .welcome-divider {
+      width:80px; height:2px;
+      background:linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin:20px auto 0;
+      animation:fadeUp 0.6s 0.8s both;
+    }
+
+    /* ── Set-start announcement ── */
+    #screen-setstart {
+      position:fixed; inset:0; z-index:40;
+      display:none;
+      flex-direction:column; align-items:center; justify-content:center;
+      background:var(--bg);
+      transition:opacity 0.6s ease;
+    }
+    #screen-setstart.show { display:flex; }
+    #screen-setstart.fade-out { opacity:0; pointer-events:none; }
+
+    .setstart-cat {
+      font-size:clamp(1rem,2vw,1.2rem);
+      font-weight:700; text-transform:uppercase;
+      letter-spacing:0.2em; color:var(--text-3);
+      margin-bottom:12px;
+      animation:fadeUp 0.5s both;
+    }
+    .setstart-title {
+      font-family:'Bebas Neue',sans-serif;
+      font-size:clamp(4rem,10vw,8rem);
+      letter-spacing:0.08em; line-height:1;
+      animation:popIn 0.5s 0.1s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    .setstart-set {
+      font-size:clamp(1rem,2.5vw,1.5rem);
+      color:var(--blue); font-weight:600;
+      margin-top:8px;
+      animation:fadeUp 0.5s 0.3s both;
+    }
+    .setstart-line {
+      width:120px; height:2px;
+      background:linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin:24px auto;
+      animation:fadeUp 0.5s 0.4s both;
+    }
+    .setstart-players {
+      font-size:1rem; color:var(--text-2);
+      animation:fadeUp 0.5s 0.5s both;
+    }
+
+    /* ── Waiting screen ── */
+    #waiting {
+      position:fixed; inset:0;
+      display:none;
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:16px; z-index:10;
+    }
+    #waiting.show { display:flex; }
+    .waiting-icon {
+      font-size:4rem; line-height:1;
+      animation:breathe 2s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%,100% { opacity:0.3; transform:scale(1); }
+      50%      { opacity:1; transform:scale(1.05); }
+    }
+    .waiting-title { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:0.1em; color:var(--text-2); }
+    .waiting-sub   { font-size:0.9rem; color:var(--text-3); }
+
+    /* ── Round Summary Screen ── */
+    #screen-summary {
+      position:fixed; inset:0; z-index:30;
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      background:var(--bg);
+    }
+    #screen-summary.show { display:flex; }
+    .sum-badge { font-size:1.2rem; font-weight:700; color:var(--gold); letter-spacing:0.2em; text-transform:uppercase; margin-bottom:12px; }
+    .sum-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(4rem,10vw,6rem); letter-spacing:0.05em; line-height:1; margin-bottom:40px; }
+    .sum-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:40px; text-align:center; }
+    .sum-stat-val { font-family:'Bebas Neue',sans-serif; font-size:3.5rem; line-height:1; }
+    .sum-stat-lbl { font-size:1rem; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:0.1em; margin-top:8px; }
+    .sum-stat.sold .sum-stat-val { color:var(--green); }
+    .sum-stat.unsold .sum-stat-val { color:var(--red); }
+
+  </style>
+
+  <!-- ═══════ Welcome / Intro Screen ═══════ -->
+  <div id="screen-welcome">
+    <div class="welcome-ball">⚽</div>
+    <div class="welcome-title shimmer">Football Auction</div>
+    <div class="welcome-sub">Welcome! Let the bidding begin.</div>
+    <div class="welcome-divider"></div>
+    <div class="welcome-tagline">Waiting for Admin to load a set…</div>
+  </div>
+
+  <!-- ═══════ Set-Start Announcement ═══════ -->
+  <div id="screen-setstart">
+    <div class="setstart-cat" id="ss-cat">Forwards</div>
+    <div class="setstart-title shimmer" id="ss-title">Set 1</div>
+    <div class="setstart-set" id="ss-players">— players ready —</div>
+    <div class="setstart-line"></div>
+    <div class="setstart-players">Get your paddles ready!</div>
+  </div>
+
+  <!-- ═══════ Waiting (mid-auction) ═══════ -->
+  <div id="waiting">
+    <div class="waiting-icon">📡</div>
+    <div class="waiting-title">Queue Empty</div>
+    <div class="waiting-sub">Load a set from the Admin Panel to continue.</div>
+  </div>
+
+  <!-- ═══════ Round Summary ═══════ -->
+  <div id="screen-summary">
+    <div class="sum-badge">Round Complete</div>
+    <div class="sum-title">Auction Summary</div>
+    <div class="sum-grid">
+      <div class="sum-stat spent">
+        <div class="sum-stat-val" id="d-sum-spent">$0M</div>
+        <div class="sum-stat-lbl">Total Spent</div>
+      </div>
+      <div class="sum-stat sold">
+        <div class="sum-stat-val" id="d-sum-sold">0</div>
+        <div class="sum-stat-lbl">Players Sold</div>
+      </div>
+      <div class="sum-stat unsold">
+        <div class="sum-stat-val" id="d-sum-unsold">0</div>
+        <div class="sum-stat-lbl">Players Unsold</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main display -->
+  <div id="display">
+    <div class="d-photo-panel">
+      <img id="d-photo" src="" alt="Player" />
+    </div>
+    <div class="d-info">
+      <div class="d-top-badges">
+        <div id="d-round">Round 1 — Live</div>
+        <span id="d-set-badge" class="badge badge-blue">Forwards · Set 1</span>
+      </div>
+
+      <h1 id="d-name">—</h1>
+
+      <div class="d-meta">
+        <div id="d-pos">—</div>
+        <div id="d-club">—</div>
+        <div id="d-nat">—</div>
+      </div>
+
+      <div class="d-price-section">
+        <div class="d-price-label">Current Bid</div>
+        <div class="d-price-row">
+          <div id="d-price" class="price-tag">$0M</div>
+          <div id="d-arrow" class="d-arrow">▲</div>
+        </div>
+        <div id="d-base">Base: $0M</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOLD overlay -->
+  <div class="result-overlay" id="overlay-sold">
+    <div class="ov-card sold-card">
+      <div class="ov-ribbon">
+        <span class="ov-badge sold-badge"><span class="ov-badge-dot"></span> SOLD</span>
+      </div>
+      <div id="ov-sold-logo-container" class="ov-logo-container">
+        <img id="ov-sold-logo" class="ov-logo" src="" alt="Team Logo" style="display:none;" />
+        <div id="ov-sold-logo-placeholder" class="ov-logo-placeholder"></div>
+      </div>
+      <div class="ov-meta">
+        <span class="ov-label">NEW DESTINATION</span>
+        <h2 id="ov-sold-team" class="ov-team-name">—</h2>
+      </div>
+      <div class="ov-divider-line"></div>
+      <div class="ov-price-container">
+        <span class="ov-label">TRANSFER FEE</span>
+        <div id="ov-sold-price" class="ov-price">$0M</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UNSOLD overlay -->
+  <div class="result-overlay" id="overlay-unsold">
+    <div class="ov-card unsold-card">
+      <div class="ov-ribbon">
+        <span class="ov-badge unsold-badge"><span class="ov-badge-dot"></span> UNSOLD</span>
+      </div>
+      <div class="ov-icon-wrapper">
+        <div class="ov-icon-circle">❌</div>
+      </div>
+      <div class="ov-meta">
+        <span class="ov-label">STATUS</span>
+        <h2 class="ov-status-title">PASSED / UNSOLD</h2>
+      </div>
+      <div class="ov-divider-line"></div>
+      <div class="ov-unsold-hint">Player will return in Round 2</div>
+    </div>
+  </div>
+
+  <footer class="d-footer">
+    <div class="d-footer-brand">⚽ Football Auction</div>
+    <div class="d-tickers">
+      <div class="ticker-item sold">
+        <div class="t-dot"></div>
+        <span class="t-label">Sold</span>
+        <span class="t-val" id="t-sold">0</span>
+      </div>
+      <div class="ticker-item unsold">
+        <div class="t-dot"></div>
+        <span class="t-label">Unsold</span>
+        <span class="t-val" id="t-unsold">0</span>
+      </div>
+      <div class="ticker-item remain">
+        <div class="t-dot"></div>
+        <span class="t-label">Remaining</span>
+        <span class="t-val" id="t-remain">0</span>
+      </div>
+    </div>
+    <div class="d-hint" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+      <span id="rt-status" style="font-size:0.68rem;font-weight:600;letter-spacing:0.06em;color:#f0b429;">● CONNECTING</span>
+      <span>Double-click for fullscreen</span>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/display.js"></script>
+</body>
+</html>
